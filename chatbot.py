@@ -6,7 +6,7 @@ from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, Callb
 import configparser
 import logging
 import redis
-from ChatGPT_HKBU import HKBU_ChatGPT  # 导入ChatGPT模块
+from ChatGPT_HKBU import HKBU_ChatGPT
 
 # 配置日志
 logging.basicConfig(
@@ -45,6 +45,8 @@ def main():
     # 注册命令处理器
     dispatcher.add_handler(CommandHandler("add", add))  # /add 命令
     dispatcher.add_handler(CommandHandler("help", help_command))  # /help 命令
+    dispatcher.add_handler(CommandHandler("hello", hello_command))  # /hello 命令
+
 
     # 注册消息处理器（禁用原回声功能，启用ChatGPT回复）
     chatgpt_handler = MessageHandler(Filters.text & (~Filters.command), equiped_chatgpt)
@@ -80,6 +82,15 @@ def help_command(update: Update, context: CallbackContext):
     update.message.reply_text('Available commands:\n'
                              '/add <keyword> - Count the frequency of a keyword\n'
                              '/help - Show this help message')
+
+# /hello 命令：回复问候
+def hello_command(update: Update, context: CallbackContext):
+    """Responds to the /hello command"""
+    if context.args:
+        name = context.args[0]  # 得到用户输入的名字
+        update.message.reply_text(f'Good day, {name}!')  # 回复问候
+    else:
+        update.message.reply_text('Usage: /hello <name>')  # 处理无名字输入
 
 if __name__ == '__main__':
     main()
