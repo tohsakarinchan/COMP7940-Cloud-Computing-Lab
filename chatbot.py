@@ -1,17 +1,14 @@
-# chatbot.py
-# 依赖：python-telegram-bot==13.7, redis, requests
-
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
-import configparser
+import os
 import logging
 import redis
+from telegram import Update, Bot
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from ChatGPT_HKBU import HKBU_ChatGPT
 
 # 配置日志
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
 
@@ -19,78 +16,94 @@ logger = logging.getLogger(__name__)
 global redis1
 global chatgpt
 
-def main():
-    # 读取配置文件
-    config = configparser.ConfigParser()
-    config.read('config.ini')
 
-    # 初始化Redis连接
-    global redis1
-    redis1 = redis.Redis(
-        host=config['REDIS']['HOST'],
-        password=config['REDIS']['PASSWORD'],
-        port=config['REDIS']['REDISPORT'],
-        decode_responses=config['REDIS'].getboolean('DECODE_RESPONSE'),
-        username=config['REDIS']['USER_NAME']
-    )
-
-    # 初始化ChatGPT
-    global chatgpt
-    chatgpt = HKBU_ChatGPT(config)
-
-    # 初始化Telegram Bot
-    updater = Updater(token=config['TELEGRAM']['ACCESS_TOKEN'], use_context=True)
-    dispatcher = updater.dispatcher
-
-    # 注册命令处理器
-    dispatcher.add_handler(CommandHandler("add", add))  # /add 命令
-    dispatcher.add_handler(CommandHandler("help", help_command))  # /help 命令
-    dispatcher.add_handler(CommandHandler("hello", hello_command))  # /hello 命令
-
-
-    # 注册消息处理器（禁用原回声功能，启用ChatGPT回复）
-    chatgpt_handler = MessageHandler(Filters.text & (~Filters.command), equiped_chatgpt)
-    dispatcher.add_handler(chatgpt_handler)
-
-    # 启动机器人
-    updater.start_polling()
-    logger.info("Bot started! Press Ctrl+C to stop.")
-    updater.idle()
-
-# ChatGPT回复功能
-def equiped_chatgpt(update: Update, context: CallbackContext):
-    """使用ChatGPT回复用户消息"""
-    user_message = update.message.text
-    reply_message = chatgpt.submit(user_message)  # 调用ChatGPT API
-    logger.info(f"User: {user_message}, ChatGPT: {reply_message}")
-    context.bot.send_message(chat_id=update.effective_chat.id, text=reply_message)
-
-# /add 命令：统计关键词频率
 def add(update: Update, context: CallbackContext):
     """统计关键词频率"""
     try:
-        keyword = context.args[0]  # 获取用户输入的关键词
-        redis1.incr(keyword)  # 增加关键词计数
-        count = redis1.get(keyword)  # 获取当前计数
+        keyword = context.args[0]
+        redis1.incr(keyword)
+        count = redis1.get(keyword)
         update.message.reply_text(f'You have said "{keyword}" for {count} times.')
     except (IndexError, ValueError):
-        update.message.reply_text('Usage: /add <keyword>')
+        update.message.reply_text("Usage: /add <keyword>")
 
-# /help 命令：显示帮助信息
+
 def help_command(update: Update, context: CallbackContext):
     """显示帮助信息"""
-    update.message.reply_text('Available commands:\n'
-                             '/add <keyword> - Count the frequency of a keyword\n'
-                             '/help - Show this help message')
+    update.message.reply_text(
+        "Available commands:\n"
+        "/add <keyword> - Count the frequency of a keyword\n"
+        "/help - Show this help message"
+    )
 
-# /hello 命令：回复问候
+
 def hello_command(update: Update, context: CallbackContext):
     """Responds to the /hello command"""
     if context.args:
-        name = context.args[0]  # 得到用户输入的名字
-        update.message.reply_text(f'Good day, {name}!')  # 回复问候
+        name = context.args[0]
+        update.message.reply_text(f"Good day, {name}!")
     else:
-        update.message.reply_text('Usage: /hello <name>')  # 处理无名字输入
+        update.message.reply_text("Usage: /hello <name>")
 
-if __name__ == '__main__':
+
+def equiped_chatgpt(update: Update, context: CallbackContext):
+    """使用 ChatGPT 回复用户消息"""
+    user_message = update.message.text
+    reply_message = chatgpt.submit(user_message)
+    logger.info(f"User: {user_message}, ChatGPT: {reply_message}")
+    context.bot.send_message(chat_id=update.effective_chat.id, text=reply_message)
+
+
+def main():
+    # 读取 Redis 连接 URL
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        logger.error("❌ REDIS_URL is not set!")
+        raise ValueError("REDIS_URL is missing!")
+
+    # 初始化 Redis 连接
+    global redis1
+    redis1 = redis.Redis.from_url(redis_url, decode_responses=True)
+
+    try:
+        redis1.ping()
+        logger.info("✅ Connected to Redis successfully!")
+    except redis.exceptions.ConnectionError:
+        logger.error("❌ Failed to connect to Redis.")
+        raise
+
+    # 读取 Telegram Token
+    telegram_token = os.getenv("TELEGRAM_TOKEN")
+    if not telegram_token:
+        logger.error("❌ TELEGRAM_TOKEN is not set!")
+        raise ValueError("TELEGRAM_TOKEN is missing!")
+
+    # 初始化 ChatGPT
+    global chatgpt
+    chatgpt = HKBU_ChatGPT(
+        base_url=os.getenv("CHATGPT_BASE_URL"),
+        model=os.getenv("CHATGPT_MODEL"),
+        api_version=os.getenv("CHATGPT_API_VERSION"),
+        access_token=os.getenv("CHATGPT_ACCESS_TOKEN"),
+    )
+
+    # 初始化 Telegram Bot
+    updater = Updater(token=telegram_token, use_context=True)
+    dispatcher = updater.dispatcher
+
+    # 注册命令处理器
+    dispatcher.add_handler(CommandHandler("add", add))
+    dispatcher.add_handler(CommandHandler("help", help_command))
+    dispatcher.add_handler(CommandHandler("hello", hello_command))
+
+    # 注册消息处理器（ChatGPT 回复）
+    chatgpt_handler = MessageHandler(Filters.text & (~Filters.command), equiped_chatgpt)
+    dispatcher.add_handler(chatgpt_handler)
+
+    # 启动 Bot
+    updater.start_polling()
+    logger.info("🤖 Bot started! Press Ctrl+C to stop.")
+    updater.idle()
+
+if __name__ == "__main__":
     main()
