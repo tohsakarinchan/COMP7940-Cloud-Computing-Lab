@@ -1,0 +1,33 @@
+# fly.toml app configuration file generated for cloud-computing-lab-2440068 on 2025-03-22T02:52:58+08:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'cloud-computing-lab-2440068'
+primary_region = 'hkg'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  PORT = '8080'
+
+[[services]]
+  internal_port = 8443
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+    
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [services.concurrency]
+    type = 'connections'
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  size = 'shared-cpu-1x'
