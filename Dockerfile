@@ -11,4 +11,4 @@ COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 运行 chatbot.py
-CMD ["python", "chatbot.py", "qqbot.py"]
+CMD ["python", "chatbot.py"]
